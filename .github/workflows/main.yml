@@ -9,20 +9,23 @@ on:
       - v*
 
 jobs:
-  main:
+  build:
     runs-on: ubuntu-20.04
     steps:
+      - name: Export extra envs
+        uses: FranzDiebold/github-env-vars-action@v2
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Build
-        run: |
-          docker build --tag ironhalik/docker-waitforit .
-      - name: Test
-        run: docker run ironhalik/docker-waitforit -address https://example.com/ -status 200 -- echo "example.com is up"
-      - name: Push
-        run: |
-          echo "${{ secrets.DOCKER_HUB_PASS }}" | docker login -u ironhalik --password-stdin
-          [ ${GITHUB_REF##*/} == "main" ] && TAG="latest" || TAG=${GITHUB_REF##*/}
-          echo "Pushing tag: ${TAG}"
-          docker tag ironhalik/docker-waitforit ironhalik/docker-waitforit:${TAG}
-          docker push ironhalik/docker-waitforit:${TAG}
+      - name: Prepare docker buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_HUB_PASS }}" | docker login -u "ironhalik" --password-stdin
+      - name: Build Docker image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ironhalik/docker-waitforit:${{ env.CI_REF_NAME }},ironhalik/docker-waitforit:${{ env.CI_SHA_SHORT }}
